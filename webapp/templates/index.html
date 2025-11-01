@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Powered Test Generator</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Prism.js for syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" rel="stylesheet" />
+    <style>
+        body {
+            padding-top: 20px;
+            background-color: #f8f9fa;
+        }
+
+        .container-fluid {
+            max-width: 1400px;
+        }
+
+        textarea {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+        }
+
+        pre {
+            background-color: #272822;
+            /* Okaidia theme background */
+            color: #f8f8f2;
+            /* Okaidia theme text color */
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            height: 400px;
+        }
+
+        code[class*="language-"] {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container-fluid">
+        <h1 class="text-center mb-4">AI-Powered Python Test Generator</h1>
+
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">Paste Your Python Function or Upload File</div>
+                    <div class="card-body">
+                        <textarea id="functionCode" class="form-control mb-3" rows="15" placeholder="def my_function(arg1, arg2):
+    # Your code here
+    return arg1 + arg2"></textarea>
+                        <div class="mb-3">
+                            <label for="formFile" class="form-label">Upload Python File</label>
+                            <input class="form-control" type="file" id="formFile" accept=".py">
+                        </div>
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="explainToggle" checked>
+                            <label class="form-check-label" for="explainToggle">Add Explanations</label>
+                        </div>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="refineToggle">
+                            <label class="form-check-label" for="refineToggle">Refine Coverage Tests</label>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary" onclick="generateTests('unit')">Generate Unit Tests</button>
+                            <button class="btn btn-info text-white" onclick="generateTests('coverage')">Generate
+                                Coverage Tests</button>
+                            <button class="btn btn-success" onclick="runTests()">Run Generated Tests</button>
+                            <button class="btn btn-warning" onclick="runMutationTests()">Run Mutation Tests</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-header">Generated Tests</div>
+                    <div class="card-body">
+                        <pre><code id="generatedTests" class="language-python"></code></pre>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">Test Execution Results</div>
+                    <div class="card-body">
+                        <pre><code id="testResults" class="language-bash"></code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Prism.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script>
+        document.getElementById('formFile').addEventListener('change', function (event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    document.getElementById('functionCode').value = e.target.result;
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        async function generateTests(testType) {
+            const functionCode = document.getElementById('functionCode').value;
+            const explain = document.getElementById('explainToggle').checked;
+            const refine = document.getElementById('refineToggle').checked;
+            const generatedTestsElement = document.getElementById('generatedTests');
+            const testResultsElement = document.getElementById('testResults');
+
+            generatedTestsElement.textContent = 'Generating tests...';
+            testResultsElement.textContent = ''; // Clear previous test results
+            Prism.highlightElement(generatedTestsElement);
+
+            try {
+                const response = await fetch('/generate_tests', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        function_code: functionCode,
+                        test_type: testType,
+                        explain: explain,
+                        refine: refine
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    generatedTestsElement.textContent = data.generated_tests;
+                } else {
+                    generatedTestsElement.textContent = 'Error: ' + data.error;
+                }
+            } catch (error) {
+                generatedTestsElement.textContent = 'An error occurred: ' + error;
+            } finally {
+                Prism.highlightElement(generatedTestsElement);
+            }
+        }
+
+        async function runTests() {
+            const functionCode = document.getElementById('functionCode').value;
+            const generatedTests = document.getElementById('generatedTests').textContent;
+            const testResultsElement = document.getElementById('testResults');
+
+            if (!functionCode || !generatedTests) {
+                testResultsElement.textContent = 'Please generate tests first.';
+                Prism.highlightElement(testResultsElement);
+                return;
+            }
+
+            testResultsElement.textContent = 'Running tests...';
+            Prism.highlightElement(testResultsElement);
+
+            try {
+                const response = await fetch('/run_tests', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        function_code: functionCode,
+                        generated_tests: generatedTests
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    let output = "";
+                    if (data.stdout) output += data.stdout + "\n";
+                    if (data.stderr) output += "Error/Stderr:\n" + data.stderr + "\n";
+                    output += `Exit Code: ${data.exit_code}`;
+                    testResultsElement.textContent = output;
+                } else {
+                    testResultsElement.textContent = 'Error: ' + data.error;
+                }
+            } catch (error) {
+                testResultsElement.textContent = 'An error occurred: ' + error;
+            } finally {
+                Prism.highlightElement(testResultsElement);
+            }
+        }
+
+        async function runMutationTests() {
+            const functionCode = document.getElementById('functionCode').value;
+            const generatedTests = document.getElementById('generatedTests').textContent;
+            const testResultsElement = document.getElementById('testResults');
+
+            if (!functionCode || !generatedTests) {
+                testResultsElement.textContent = 'Please generate tests first.';
+                Prism.highlightElement(testResultsElement);
+                return;
+            }
+
+            testResultsElement.textContent = 'Running mutation tests...';
+            Prism.highlightElement(testResultsElement);
+
+            try {
+                const response = await fetch('/run_mutation_tests', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        function_code: functionCode,
+                        generated_tests: generatedTests
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    let output = "Mutation Testing Results:\n";
+                    if (data.success) {
+                        output += data.output + "\n";
+                        const summary = data.summary;
+                        if (summary.total > 0) {
+                            const survivalRate = (summary.survived / summary.total * 100).toFixed(1);
+                            output += `Summary: ${summary.killed} killed, ${summary.survived} survived (${survivalRate}% survival rate)`;
+                        }
+                    } else {
+                        output += `Error: ${data.error}`;
+                    }
+                    testResultsElement.textContent = output;
+                } else {
+                    testResultsElement.textContent = 'Error: ' + data.error;
+                }
+            } catch (error) {
+                testResultsElement.textContent = 'An error occurred: ' + error;
+            } finally {
+                Prism.highlightElement(testResultsElement);
+            }
+        }
+    </script>
+</body>
+
+</html>
