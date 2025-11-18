@@ -5,6 +5,7 @@ import threading
 import tempfile
 import subprocess
 import shutil
+import ast
 
 # Add the parent directory to the sys.path to import cli and other modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -14,6 +15,14 @@ from coverage_tester import generate_coverage_tests
 from io import StringIO
 
 app = Flask(__name__)
+
+def validate_python_code(code):
+    """Validate that code is valid Python."""
+    try:
+        ast.parse(code)
+        return True, None
+    except SyntaxError as e:
+        return False, f"Syntax error: {e.msg} at line {e.lineno}"
 
 @app.route('/')
 def index():
@@ -28,6 +37,11 @@ def generate_tests_endpoint():
 
     if not function_code:
         return jsonify({'error': 'No function code provided'}), 400
+    
+    # Validate Python syntax
+    valid, error_msg = validate_python_code(function_code)
+    if not valid:
+        return jsonify({'error': error_msg}), 400
 
     result = {'generated_tests': ''}
 
@@ -100,12 +114,17 @@ def run_tests_endpoint():
             capture_output=True,
             text=True,
             env=env,
-            check=False # Don't raise an exception for non-zero exit codes (test failures)
+            check=False, # Don't raise an exception for non-zero exit codes (test failures)
+            timeout=30  # 30 second timeout to prevent hanging
         )
-        test_results['stdout'] = process.stdout
-        test_results['stderr'] = process.stderr
+        # Limit output size to prevent memory issues
+        test_results['stdout'] = process.stdout[:10000]
+        test_results['stderr'] = process.stderr[:10000]
         test_results['exit_code'] = process.returncode
 
+    except subprocess.TimeoutExpired:
+        test_results['stderr'] = "Test execution timed out after 30 seconds"
+        test_results['exit_code'] = 1
     except Exception as e:
         print(f"Error in /run_tests: {e}") # Log the error
         test_results['stderr'] = f"An error occurred during test execution: {e}"
@@ -146,4 +165,5 @@ def run_mutation_tests_endpoint():
             shutil.rmtree(temp_dir)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+    app.run(debug=debug_mode, host='127.0.0.1', port=5000)
