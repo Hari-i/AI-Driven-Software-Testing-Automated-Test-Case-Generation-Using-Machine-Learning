@@ -51,5 +51,4 @@ venv.bak/
 Thumbs.db
 
 # Generated test files (examples)
-demo/test_*.py
-!demo/test_clean.py
+/demo

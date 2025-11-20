@@ -11,12 +11,21 @@ def cli():
     pass
 
 @cli.command()
+def check_api_key():
+    """Check if GEMINI_API_KEY is set."""
+    api_key = os.getenv('GEMINI_API_KEY')
+    if api_key:
+        click.echo(f"GEMINI_API_KEY is set: {api_key[:10]}...{api_key[-4:]}")
+    else:
+        click.echo("GEMINI_API_KEY is not set")
+
+@cli.command(name='generate')
 @click.option('--file', 'file_path', help='Path to Python module')
 @click.option('--output', help='Output test file')
 @click.option('--type', type=click.Choice(['unit', 'coverage']), help='Type of tests to generate')
 @click.option('--explain', is_flag=True, help='Add explanation comments to generated tests')
 @click.option('--refine', is_flag=True, help='Refine coverage tests iteratively (up to 3 iterations)')
-def generate(file_path: str, output: str, type: str, explain: bool, refine: bool):
+def generate(file_path: str, output: str, type: str, explain: bool, refine: bool) -> None:
     """Generate unit or coverage tests. If no options are provided, runs in interactive mode."""
     api_key = os.getenv('GEMINI_API_KEY')
     if not api_key:
@@ -61,10 +70,10 @@ def generate(file_path: str, output: str, type: str, explain: bool, refine: bool
     write_test_file(output, final_test_code)
     click.echo(f"Generated {type} tests for {file_path} and saved to {output}")
 
-@cli.command()
+@cli.command(name='mutate')
 @click.option('--target', required=True, help='Path to module to mutate')
 @click.option('--tests', required=True, help='Path to test file')
-def mutate(target: str, tests: str):
+def mutate(target: str, tests: str) -> None:
     """Run mutation testing on target module."""
     from mutation_tester import run_mutation_testing
     
